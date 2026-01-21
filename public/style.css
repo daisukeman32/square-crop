@@ -141,11 +141,10 @@ body {
     justify-content: center;
     align-items: center;
     gap: 12px;
-    cursor: pointer;
+    cursor: default;
     transition: background-color 0.2s, border-color 0.2s;
 }
 
-.drop-zone:hover,
 .drop-zone.drag-over {
     background-color: var(--hover-bg);
     color: var(--hover-text);
@@ -159,7 +158,6 @@ body {
     pointer-events: none;
 }
 
-.drop-zone:hover p,
 .drop-zone.drag-over p {
     color: var(--hover-text);
 }
