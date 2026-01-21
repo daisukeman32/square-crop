@@ -64,13 +64,13 @@ class SquareCrop {
 
     // ドロップゾーン設定
     setupDropZone() {
-        // フォルダ選択ボタン（先に設定）
+        // フォルダ選択ボタン（ファイル選択ダイアログを開く）
         this.folderBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             if (this.isDialogOpen) return;
             this.isDialogOpen = true;
-            this.folderInput.click();
+            this.fileInput.click();
         });
 
         // クリックでファイル選択（フォルダボタン以外）
