@@ -13,7 +13,13 @@
     <div class="container">
         <!-- ヘッダー -->
         <header class="header">
-            <h1 class="logo">Square Crop</h1>
+            <h1 class="logo">Square Crop <span class="version">2.0</span></h1>
+            <div class="header-center">
+                <div class="mode-toggle" id="modeToggle">
+                    <button class="mode-btn active" data-mode="pixiv">Pixiv</button>
+                    <button class="mode-btn" data-mode="x">X</button>
+                </div>
+            </div>
             <div class="header-right">
                 <span class="stats" id="stats" hidden>
                     <span class="stats-confirmed" id="confirmedCount">0</span> / <span id="totalCount">0</span> 確定
@@ -68,6 +74,8 @@
                             <div class="crop-handle crop-handle-ne" data-handle="ne"></div>
                             <div class="crop-handle crop-handle-sw" data-handle="sw"></div>
                             <div class="crop-handle crop-handle-se" data-handle="se"></div>
+                            <!-- サムネガイド（3:4） -->
+                            <div class="thumb-guide" id="thumbGuide" hidden></div>
                         </div>
                     </div>
 
@@ -76,6 +84,23 @@
                         <span class="current-pos" id="currentPos"></span>
                         <span class="confirm-indicator" id="confirmIndicator"></span>
                         <span class="hints-keys"></span>
+                    </div>
+                </div>
+
+                <!-- X用：比率選択 -->
+                <div class="ratio-selector" id="ratioSelector" hidden>
+                    <label>比率:</label>
+                    <select id="ratioPreset">
+                        <option value="4:5">4:5</option>
+                        <option value="9:16">9:16</option>
+                        <option value="9:18">9:18</option>
+                        <option value="9:20">9:20</option>
+                        <option value="custom">カスタム</option>
+                    </select>
+                    <div class="custom-ratio" id="customRatio" hidden>
+                        <input type="number" id="ratioW" value="9" min="1" max="20">
+                        <span>:</span>
+                        <input type="number" id="ratioH" value="16" min="1" max="30">
                     </div>
                 </div>
 

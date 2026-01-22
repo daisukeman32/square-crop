@@ -28,16 +28,26 @@ class SquareCrop {
         this.currentPosEl = document.getElementById('currentPos');
         this.hintsKeys = document.querySelector('.hints-keys');
 
+        // X用追加DOM要素
+        this.modeToggle = document.getElementById('modeToggle');
+        this.ratioSelector = document.getElementById('ratioSelector');
+        this.ratioPreset = document.getElementById('ratioPreset');
+        this.thumbGuide = document.getElementById('thumbGuide');
+
         // 状態
-        this.images = []; // { file, img, cropData: { x, y, size }, confirmed: false, thumbUrl }
+        this.images = []; // { file, img, cropData: { x, y, width, height }, confirmed: false, thumbUrl }
         this.currentIndex = 0;
         this.isDragging = false;
         this.isResizing = false;
         this.resizeHandle = null;
         this.dragStart = { x: 0, y: 0 };
-        this.cropStart = { x: 0, y: 0, size: 0 };
+        this.cropStart = { x: 0, y: 0, width: 0, height: 0 };
         this.scale = 1;
         this.isDialogOpen = false; // ダイアログ二重防止フラグ
+
+        // モード管理
+        this.currentMode = 'pixiv'; // 'pixiv' or 'x'
+        this.currentRatio = { w: 9, h: 16 }; // X用デフォルト比率
 
         // キーコンフィグ（デフォルト値）
         this.keyConfig = {
@@ -58,8 +68,164 @@ class SquareCrop {
         this.setupThemeToggle();
         this.setupKeyboardControls();
         this.setupKeyConfigUI();
+        this.setupModeToggle();
+        this.setupRatioSelector();
         this.loadTheme();
         this.updateKeyHints();
+    }
+
+    // モード切替設定
+    setupModeToggle() {
+        if (!this.modeToggle) return;
+
+        const buttons = this.modeToggle.querySelectorAll('.mode-btn');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.mode;
+                this.setMode(mode);
+            });
+        });
+    }
+
+    setMode(mode) {
+        this.currentMode = mode;
+
+        // ボタンのアクティブ状態を更新
+        const buttons = this.modeToggle.querySelectorAll('.mode-btn');
+        buttons.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // X用UIの表示切替
+        if (this.ratioSelector) {
+            this.ratioSelector.hidden = (mode !== 'x');
+        }
+        if (this.thumbGuide) {
+            this.thumbGuide.hidden = (mode !== 'x');
+        }
+
+        // 画像が読み込まれている場合、クロップデータを再計算
+        if (this.images.length > 0) {
+            this.recalculateCropDataForMode();
+            this.displayCurrentImage();
+        }
+    }
+
+    // 比率選択設定
+    setupRatioSelector() {
+        if (!this.ratioPreset) return;
+
+        this.customRatioDiv = document.getElementById('customRatio');
+        this.ratioWInput = document.getElementById('ratioW');
+        this.ratioHInput = document.getElementById('ratioH');
+
+        this.ratioPreset.addEventListener('change', () => {
+            const value = this.ratioPreset.value;
+
+            if (value === 'custom') {
+                this.customRatioDiv.hidden = false;
+                this.currentRatio = {
+                    w: parseInt(this.ratioWInput.value) || 9,
+                    h: parseInt(this.ratioHInput.value) || 16
+                };
+            } else {
+                this.customRatioDiv.hidden = true;
+                const [w, h] = value.split(':').map(Number);
+                this.currentRatio = { w, h };
+            }
+
+            // 現在の画像のみクロップデータを再計算
+            if (this.images.length > 0 && this.currentMode === 'x') {
+                this.recalculateCurrentImageCrop();
+                this.displayCurrentImage();
+            }
+        });
+
+        // カスタム比率入力時
+        const updateCustomRatio = () => {
+            if (this.ratioPreset.value !== 'custom') return;
+
+            const w = parseInt(this.ratioWInput.value) || 9;
+            const h = parseInt(this.ratioHInput.value) || 16;
+            this.currentRatio = { w, h };
+
+            if (this.images.length > 0 && this.currentMode === 'x') {
+                this.recalculateCurrentImageCrop();
+                this.displayCurrentImage();
+            }
+        };
+
+        if (this.ratioWInput) this.ratioWInput.addEventListener('change', updateCustomRatio);
+        if (this.ratioHInput) this.ratioHInput.addEventListener('change', updateCustomRatio);
+    }
+
+    // 現在の画像のみクロップデータを再計算
+    recalculateCurrentImageCrop() {
+        const current = this.images[this.currentIndex];
+        if (!current) return;
+
+        const img = current.img;
+        const { w, h } = this.currentRatio;
+        const ratio = w / h;
+        let cropWidth, cropHeight;
+
+        if (img.width / img.height > ratio) {
+            cropHeight = img.height;
+            cropWidth = cropHeight * ratio;
+        } else {
+            cropWidth = img.width;
+            cropHeight = cropWidth / ratio;
+        }
+
+        current.cropData = {
+            x: (img.width - cropWidth) / 2,
+            y: (img.height - cropHeight) / 2,
+            width: cropWidth,
+            height: cropHeight,
+            ratio: { w, h }
+        };
+        // 確定状態はリセット
+        current.confirmed = false;
+    }
+
+    // モード変更時にクロップデータを再計算
+    recalculateCropDataForMode() {
+        this.images.forEach(imageData => {
+            const img = imageData.img;
+            if (this.currentMode === 'pixiv') {
+                // Pixiv用：正方形
+                const minDim = Math.min(img.width, img.height);
+                imageData.cropData = {
+                    x: (img.width - minDim) / 2,
+                    y: (img.height - minDim) / 2,
+                    width: minDim,
+                    height: minDim
+                };
+            } else {
+                // X用：指定比率
+                const { w, h } = this.currentRatio;
+                const ratio = w / h;
+                let cropWidth, cropHeight;
+
+                if (img.width / img.height > ratio) {
+                    // 画像が横長の場合、高さを基準
+                    cropHeight = img.height;
+                    cropWidth = cropHeight * ratio;
+                } else {
+                    // 画像が縦長の場合、幅を基準
+                    cropWidth = img.width;
+                    cropHeight = cropWidth / ratio;
+                }
+
+                imageData.cropData = {
+                    x: (img.width - cropWidth) / 2,
+                    y: (img.height - cropHeight) / 2,
+                    width: cropWidth,
+                    height: cropHeight
+                };
+            }
+            // 確定状態はリセットしない（位置のみ再計算）
+        });
     }
 
     // ドロップゾーン設定
@@ -145,12 +311,7 @@ class SquareCrop {
             return new Promise((resolve) => {
                 const img = new Image();
                 img.onload = () => {
-                    const minDim = Math.min(img.width, img.height);
-                    const cropData = {
-                        x: (img.width - minDim) / 2,
-                        y: (img.height - minDim) / 2,
-                        size: minDim
-                    };
+                    const cropData = this.calculateInitialCropData(img);
                     const thumbUrl = URL.createObjectURL(file);
                     resolve({ file, img, cropData, index, confirmed: false, thumbUrl });
                 };
@@ -165,6 +326,42 @@ class SquareCrop {
             this.renderThumbnails();
             this.displayCurrentImage();
         });
+    }
+
+    // 初期クロップデータの計算
+    calculateInitialCropData(img) {
+        if (this.currentMode === 'pixiv') {
+            // Pixiv用：正方形
+            const minDim = Math.min(img.width, img.height);
+            return {
+                x: (img.width - minDim) / 2,
+                y: (img.height - minDim) / 2,
+                width: minDim,
+                height: minDim,
+                ratio: { w: 1, h: 1 } // 正方形
+            };
+        } else {
+            // X用：指定比率
+            const { w, h } = this.currentRatio;
+            const ratio = w / h;
+            let cropWidth, cropHeight;
+
+            if (img.width / img.height > ratio) {
+                cropHeight = img.height;
+                cropWidth = cropHeight * ratio;
+            } else {
+                cropWidth = img.width;
+                cropHeight = cropWidth / ratio;
+            }
+
+            return {
+                x: (img.width - cropWidth) / 2,
+                y: (img.height - cropHeight) / 2,
+                width: cropWidth,
+                height: cropHeight,
+                ratio: { w, h } // 各画像ごとに比率を記録
+            };
+        }
     }
 
     // エディタ表示
@@ -233,12 +430,31 @@ class SquareCrop {
         const scaleH = Math.min(1, maxHeight / img.height);
         this.scale = Math.min(scaleW, scaleH);
 
-        // キャンバスサイズ設定
-        this.canvas.width = img.width * this.scale;
-        this.canvas.height = img.height * this.scale;
+        // Retina対応：devicePixelRatioを考慮
+        const dpr = window.devicePixelRatio || 1;
+        const displayWidth = img.width * this.scale;
+        const displayHeight = img.height * this.scale;
 
-        // 画像描画
-        this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+        // キャンバスの実際のピクセルサイズ（高解像度）
+        this.canvas.width = displayWidth * dpr;
+        this.canvas.height = displayHeight * dpr;
+
+        // CSSでの表示サイズ
+        this.canvas.style.width = displayWidth + 'px';
+        this.canvas.style.height = displayHeight + 'px';
+
+        // コンテキストをリセットしてからスケール
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // 画像描画（高品質）
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = 'high';
+        this.ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+
+        // X用モードの場合、その画像の比率をUIに反映
+        if (this.currentMode === 'x' && current.cropData.ratio) {
+            this.updateRatioUI(current.cropData.ratio);
+        }
 
         // トリミング枠を更新
         this.updateCropBox();
@@ -250,17 +466,42 @@ class SquareCrop {
         this.currentPosEl.textContent = `${this.currentIndex + 1} / ${this.images.length}`;
     }
 
+    // 比率UIを更新（画像切替時）
+    updateRatioUI(ratio) {
+        if (!this.ratioPreset) return;
+
+        const { w, h } = ratio;
+        const ratioStr = `${w}:${h}`;
+
+        // プリセットに一致するか確認
+        const options = Array.from(this.ratioPreset.options);
+        const matchingOption = options.find(opt => opt.value === ratioStr);
+
+        if (matchingOption) {
+            this.ratioPreset.value = ratioStr;
+            if (this.customRatioDiv) this.customRatioDiv.hidden = true;
+        } else {
+            // カスタム比率
+            this.ratioPreset.value = 'custom';
+            if (this.customRatioDiv) this.customRatioDiv.hidden = false;
+            if (this.ratioWInput) this.ratioWInput.value = w;
+            if (this.ratioHInput) this.ratioHInput.value = h;
+        }
+
+        this.currentRatio = { w, h };
+    }
+
     // トリミング枠を更新
     updateCropBox() {
         const current = this.images[this.currentIndex];
         if (!current) return;
 
-        const { x, y, size } = current.cropData;
+        const { x, y, width, height } = current.cropData;
 
         this.cropBox.style.left = (x * this.scale) + 'px';
         this.cropBox.style.top = (y * this.scale) + 'px';
-        this.cropBox.style.width = (size * this.scale) + 'px';
-        this.cropBox.style.height = (size * this.scale) + 'px';
+        this.cropBox.style.width = (width * this.scale) + 'px';
+        this.cropBox.style.height = (height * this.scale) + 'px';
 
         // 確定状態に応じてスタイル変更
         if (current.confirmed) {
@@ -268,6 +509,46 @@ class SquareCrop {
         } else {
             this.cropBox.classList.remove('confirmed');
         }
+
+        // X用：サムネガイド（3:4）を更新
+        this.updateThumbGuide(width, height);
+    }
+
+    // サムネガイド（3:4）を更新
+    updateThumbGuide(cropWidth, cropHeight) {
+        if (!this.thumbGuide || this.currentMode !== 'x') {
+            if (this.thumbGuide) this.thumbGuide.hidden = true;
+            return;
+        }
+
+        this.thumbGuide.hidden = false;
+
+        // 3:4比率のガイドをクロップ枠内中央に配置
+        const guideRatio = 3 / 4;
+        const cropBoxWidth = cropWidth * this.scale;
+        const cropBoxHeight = cropHeight * this.scale;
+
+        let guideWidth, guideHeight;
+
+        // クロップ枠の幅を基準に3:4のガイドを計算
+        if (cropBoxWidth / cropBoxHeight > guideRatio) {
+            // クロップ枠が横長の場合、高さを基準
+            guideHeight = cropBoxHeight;
+            guideWidth = guideHeight * guideRatio;
+        } else {
+            // クロップ枠が縦長の場合、幅を基準
+            guideWidth = cropBoxWidth;
+            guideHeight = guideWidth / guideRatio;
+        }
+
+        // 中央に配置
+        const guideLeft = (cropBoxWidth - guideWidth) / 2;
+        const guideTop = (cropBoxHeight - guideHeight) / 2;
+
+        this.thumbGuide.style.left = guideLeft + 'px';
+        this.thumbGuide.style.top = guideTop + 'px';
+        this.thumbGuide.style.width = guideWidth + 'px';
+        this.thumbGuide.style.height = guideHeight + 'px';
     }
 
     // トリミング枠の操作設定
@@ -302,8 +583,8 @@ class SquareCrop {
                 let newX = this.cropStart.x + dx;
                 let newY = this.cropStart.y + dy;
 
-                newX = Math.max(0, Math.min(newX, current.img.width - current.cropData.size));
-                newY = Math.max(0, Math.min(newY, current.img.height - current.cropData.size));
+                newX = Math.max(0, Math.min(newX, current.img.width - current.cropData.width));
+                newY = Math.max(0, Math.min(newY, current.img.height - current.cropData.height));
 
                 current.cropData.x = newX;
                 current.cropData.y = newY;
@@ -352,8 +633,8 @@ class SquareCrop {
                 let newX = this.cropStart.x + dx;
                 let newY = this.cropStart.y + dy;
 
-                newX = Math.max(0, Math.min(newX, current.img.width - current.cropData.size));
-                newY = Math.max(0, Math.min(newY, current.img.height - current.cropData.size));
+                newX = Math.max(0, Math.min(newX, current.img.width - current.cropData.width));
+                newY = Math.max(0, Math.min(newY, current.img.height - current.cropData.height));
 
                 current.cropData.x = newX;
                 current.cropData.y = newY;
@@ -374,28 +655,41 @@ class SquareCrop {
     // リサイズ処理
     handleResize(dx, dy, current) {
         const img = current.img;
+
+        if (this.currentMode === 'pixiv') {
+            // Pixiv用：正方形リサイズ
+            this.handleSquareResize(dx, dy, current, img);
+        } else {
+            // X用：比率固定リサイズ
+            this.handleRatioResize(dx, dy, current, img);
+        }
+    }
+
+    // Pixiv用：正方形リサイズ
+    handleSquareResize(dx, dy, current, img) {
         let newSize, newX, newY;
+        const startSize = this.cropStart.width; // 正方形なのでwidthを使用
 
         switch (this.resizeHandle) {
             case 'se':
-                newSize = this.cropStart.size + Math.max(dx, dy);
+                newSize = startSize + Math.max(dx, dy);
                 newX = this.cropStart.x;
                 newY = this.cropStart.y;
                 break;
             case 'sw':
-                newSize = this.cropStart.size + Math.max(-dx, dy);
-                newX = this.cropStart.x - (newSize - this.cropStart.size);
+                newSize = startSize + Math.max(-dx, dy);
+                newX = this.cropStart.x - (newSize - startSize);
                 newY = this.cropStart.y;
                 break;
             case 'ne':
-                newSize = this.cropStart.size + Math.max(dx, -dy);
+                newSize = startSize + Math.max(dx, -dy);
                 newX = this.cropStart.x;
-                newY = this.cropStart.y - (newSize - this.cropStart.size);
+                newY = this.cropStart.y - (newSize - startSize);
                 break;
             case 'nw':
-                newSize = this.cropStart.size + Math.max(-dx, -dy);
-                newX = this.cropStart.x - (newSize - this.cropStart.size);
-                newY = this.cropStart.y - (newSize - this.cropStart.size);
+                newSize = startSize + Math.max(-dx, -dy);
+                newX = this.cropStart.x - (newSize - startSize);
+                newY = this.cropStart.y - (newSize - startSize);
                 break;
         }
 
@@ -421,7 +715,82 @@ class SquareCrop {
 
         current.cropData.x = newX;
         current.cropData.y = newY;
-        current.cropData.size = newSize;
+        current.cropData.width = newSize;
+        current.cropData.height = newSize;
+    }
+
+    // X用：比率固定リサイズ
+    handleRatioResize(dx, dy, current, img) {
+        const { w, h } = this.currentRatio;
+        const ratio = w / h;
+
+        let newWidth, newHeight, newX, newY;
+        const startWidth = this.cropStart.width;
+        const startHeight = this.cropStart.height;
+
+        // リサイズ量を計算（対角方向の動きを基準）
+        let delta;
+        switch (this.resizeHandle) {
+            case 'se':
+                delta = Math.max(dx, dy * ratio);
+                newWidth = startWidth + delta;
+                newHeight = newWidth / ratio;
+                newX = this.cropStart.x;
+                newY = this.cropStart.y;
+                break;
+            case 'sw':
+                delta = Math.max(-dx, dy * ratio);
+                newWidth = startWidth + delta;
+                newHeight = newWidth / ratio;
+                newX = this.cropStart.x - (newWidth - startWidth);
+                newY = this.cropStart.y;
+                break;
+            case 'ne':
+                delta = Math.max(dx, -dy * ratio);
+                newWidth = startWidth + delta;
+                newHeight = newWidth / ratio;
+                newX = this.cropStart.x;
+                newY = this.cropStart.y - (newHeight - startHeight);
+                break;
+            case 'nw':
+                delta = Math.max(-dx, -dy * ratio);
+                newWidth = startWidth + delta;
+                newHeight = newWidth / ratio;
+                newX = this.cropStart.x - (newWidth - startWidth);
+                newY = this.cropStart.y - (newHeight - startHeight);
+                break;
+        }
+
+        const minWidth = 50;
+        const minHeight = minWidth / ratio;
+
+        newWidth = Math.max(minWidth, newWidth);
+        newHeight = newWidth / ratio;
+
+        // 境界チェック
+        if (newX < 0) {
+            newWidth = newWidth + newX;
+            newHeight = newWidth / ratio;
+            newX = 0;
+        }
+        if (newY < 0) {
+            newHeight = newHeight + newY;
+            newWidth = newHeight * ratio;
+            newY = 0;
+        }
+        if (newX + newWidth > img.width) {
+            newWidth = img.width - newX;
+            newHeight = newWidth / ratio;
+        }
+        if (newY + newHeight > img.height) {
+            newHeight = img.height - newY;
+            newWidth = newHeight * ratio;
+        }
+
+        current.cropData.x = newX;
+        current.cropData.y = newY;
+        current.cropData.width = newWidth;
+        current.cropData.height = newHeight;
     }
 
     // ナビゲーション設定
@@ -534,34 +903,59 @@ class SquareCrop {
             for (let i = 0; i < confirmedImages.length; i++) {
                 const { img, cropData, file } = confirmedImages[i];
 
+                // モードに応じた出力サイズ計算
+                let outWidth, outHeight;
+                if (this.currentMode === 'pixiv') {
+                    // Pixiv用：正方形
+                    outWidth = outputSize;
+                    outHeight = outputSize;
+                } else {
+                    // X用：長辺を基準に、各画像の比率で計算
+                    const { w, h } = cropData.ratio || this.currentRatio;
+                    if (w >= h) {
+                        // 横長または正方形：幅が長辺
+                        outWidth = outputSize;
+                        outHeight = outputSize * (h / w);
+                    } else {
+                        // 縦長：高さが長辺
+                        outHeight = outputSize;
+                        outWidth = outputSize * (w / h);
+                    }
+                }
+
                 const croppedCanvas = document.createElement('canvas');
-                croppedCanvas.width = outputSize;
-                croppedCanvas.height = outputSize;
+                croppedCanvas.width = Math.round(outWidth);
+                croppedCanvas.height = Math.round(outHeight);
                 const croppedCtx = croppedCanvas.getContext('2d');
 
                 croppedCtx.drawImage(
                     img,
-                    cropData.x, cropData.y, cropData.size, cropData.size,
-                    0, 0, outputSize, outputSize
+                    cropData.x, cropData.y, cropData.width, cropData.height,
+                    0, 0, croppedCanvas.width, croppedCanvas.height
                 );
 
                 const croppedBlob = await new Promise(resolve => {
                     croppedCanvas.toBlob(resolve, 'image/png');
                 });
 
-                const originalBlob = file;
                 const baseName = (i + 1).toString();
-                const ext = file.name.split('.').pop() || 'png';
 
-                zip.file(`${baseName}-1.png`, croppedBlob);
-                zip.file(`${baseName}-2.${ext}`, originalBlob);
+                if (this.currentMode === 'pixiv') {
+                    // Pixiv用：クロップ画像 + 元画像
+                    const ext = file.name.split('.').pop() || 'png';
+                    zip.file(`${baseName}-1.png`, croppedBlob);
+                    zip.file(`${baseName}-2.${ext}`, file);
+                } else {
+                    // X用：クロップ画像のみ
+                    zip.file(`${baseName}.png`, croppedBlob);
+                }
             }
 
             const content = await zip.generateAsync({ type: 'blob' });
             const url = URL.createObjectURL(content);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'square-crop.zip';
+            a.download = this.currentMode === 'pixiv' ? 'square-crop.zip' : 'x-crop.zip';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

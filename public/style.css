@@ -70,10 +70,56 @@ body {
     letter-spacing: -0.5px;
 }
 
+.version {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 4px;
+}
+
+.header-center {
+    display: flex;
+    align-items: center;
+}
+
 .header-right {
     display: flex;
     align-items: center;
     gap: 16px;
+}
+
+/* モード切替トグル */
+.mode-toggle {
+    display: flex;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.mode-btn {
+    background: transparent;
+    border: none;
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.mode-btn:first-child {
+    border-right: 1px solid var(--border-color);
+}
+
+.mode-btn.active {
+    background-color: var(--hover-bg);
+    color: var(--hover-text);
+}
+
+.mode-btn:hover:not(.active) {
+    background-color: var(--thumb-bg);
+    color: var(--text-color);
 }
 
 .stats {
@@ -333,6 +379,77 @@ body {
     bottom: -7px;
     right: -7px;
     cursor: se-resize;
+}
+
+/* サムネガイド（3:4） */
+.thumb-guide {
+    position: absolute;
+    border: 2px dashed rgba(255, 200, 0, 0.9);
+    background: transparent;
+    pointer-events: none;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.3);
+}
+
+.thumb-guide::before {
+    content: '3:4 サムネ範囲';
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: rgba(255, 200, 0, 1);
+    white-space: nowrap;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+/* 比率選択 */
+.ratio-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.ratio-selector label {
+    font-weight: 500;
+    font-size: 13px;
+}
+
+.ratio-selector select {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    height: 36px;
+    border-radius: 6px;
+}
+
+.custom-ratio {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.custom-ratio input {
+    width: 50px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    height: 36px;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.custom-ratio span {
+    font-weight: 600;
 }
 
 
